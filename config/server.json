@@ -1,0 +1,10 @@
+{
+  "profileManager": {
+    "rootConfigPath": "./configs",
+    "profileScanInterval": 300000
+  },
+  "clusterTracker": {
+    "stateFilePath": "./state/dataproc-state.json",
+    "stateSaveInterval": 60000
+  }
+}
