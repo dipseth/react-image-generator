@@ -4,6 +4,8 @@
 
 This document outlines the implementation plan for enhancing the image generator application with OpenAI's GPT Image model support. The plan includes completely replacing DALL-E 3, creating separate UI components for editing images, implementing a dedicated Variations page, showing all new parameters by default, and implementing detailed error handling.
 
+> **Important Note**: The GPT-image-1 model returns base64-encoded image data by default, unlike DALL-E 3 which returns URLs. The 'response_format' parameter is not needed or supported for GPT-image-1. The implementation must handle both response types appropriately.
+
 ```mermaid
 graph TD
     A[Update Types & Interfaces] --> B[Update OpenAI Provider]
@@ -56,11 +58,17 @@ Next, we need to update the OpenAI provider to use the GPT Image model and imple
    - Implement `editImage` method
    - Implement `createVariation` method
    - Update error handling for model-specific errors
+   - **Important**: Remove any use of the 'response_format' parameter for GPT-image-1 as it's not supported
 
 2. Update the provider to handle the new parameters:
    - Handle `quality` parameter
    - Handle `format` parameter
    - Handle `transparency` parameter
+   
+3. Implement base64 response handling:
+   - GPT-image-1 returns base64-encoded image data by default
+   - Add logic to convert base64 data to data URLs for display in the UI
+   - Ensure the provider correctly processes both URL responses (DALL-E 3) and base64 responses (GPT-image-1)
 
 ### 2.3 Update Provider Factory
 
@@ -189,8 +197,8 @@ sequenceDiagram
     UI->>Query: Trigger image operation
     Query->>Service: Call appropriate method
     Service->>API: Make API request
-    API-->>Service: Return image data
-    Service-->>Query: Process response
+    API-->>Service: Return image data (base64 for GPT-image-1, URL for DALL-E 3)
+    Service-->>Query: Process response (convert base64 to data URL if needed)
     Query-->>Store: Update image data
     Store-->>UI: Update UI with new data
 ```
@@ -200,12 +208,12 @@ sequenceDiagram
 Here's a detailed list of files that need to be modified:
 
 1. `src/types/index.ts` - Update interfaces and types
-2. `src/services/imageGeneration/openai.ts` - Update provider implementation
+2. `src/services/imageGeneration/openai.ts` - Update provider implementation to handle base64 responses from GPT-image-1
 3. `src/services/imageGeneration/index.ts` - Update provider factory
-4. `src/store/slices/imageSlice.ts` - Update store slice
+4. `src/store/slices/imageSlice.ts` - Update store slice to handle both URL and base64 image data
 5. `src/components/ImageGenerator/index.tsx` - Update UI for new parameters
 6. `src/components/ImageGallery/index.tsx` - Add navigation to new pages
-7. `src/hooks/queries/useGenerateImage.ts` - Update hook for new parameters
+7. `src/hooks/queries/useGenerateImage.ts` - Update hook for new parameters and base64 handling
 
 New files to be created:
 

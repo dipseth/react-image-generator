@@ -317,8 +317,8 @@ sequenceDiagram
     UI->>Query: Trigger image generation
     Query->>Service: Call generate image
     Service->>API: Make API request
-    API-->>Service: Return image URL
-    Service-->>Query: Process response
+    API-->>Service: Return image data (URL or base64)
+    Service-->>Query: Process response (convert base64 to data URL if needed)
     Query-->>Store: Update image list
     Store-->>UI: Update UI with new image
 ```
@@ -425,6 +425,20 @@ src/
 6. Implement proper validation for user inputs
 7. Use appropriate image sizes to optimize cost and quality
 8. Handle and display generation errors to users
+9. Handle different response formats based on the model used
+
+#### Model-Specific Response Handling
+When working with different OpenAI image models, it's important to understand their response format differences:
+
+| Model         | Response Format | 'response_format' Param | Handling Required      |
+|---------------|----------------|------------------------|-----------------------|
+| DALL-E 3      | URL            | Required               | Use image URL directly |
+| GPT-image-1   | base64         | Not needed/supported   | Convert base64 to data URL |
+
+**Important Notes:**
+- The GPT-image-1 model returns base64-encoded image data by default
+- The 'response_format' parameter is not needed or supported for GPT-image-1
+- Applications must handle both URL and base64 responses appropriately based on the model used
 
 ### Provider Abstraction Layer
 To ensure the application can work with multiple image generation providers:
@@ -492,22 +506,45 @@ export async function generateImage({
       throw new Error('Prompt must be at least 3 characters long');
     }
     
-    // Call OpenAI API
-    const response = await openai.images.generate({
-      model: "dall-e-3",
-      prompt,
-      n,
-      size,
-      response_format: "url",
-    });
-
-    // Return the generated image data
-    return {
-      id: response.created,
-      url: response.data[0].url,
-      prompt,
-      revised_prompt: response.data[0].revised_prompt
-    };
+    // Call OpenAI API with model-specific parameters
+    let response;
+    
+    if (model === "gpt-image-1") {
+      // GPT-image-1 returns base64 data by default, no response_format needed
+      response = await openai.images.generate({
+        model: "gpt-image-1",
+        prompt,
+        n,
+        size,
+        // No response_format parameter for GPT-image-1
+      });
+      
+      // Return the generated image data as a data URL
+      return {
+        id: response.created,
+        url: `data:image/png;base64,${response.data[0].b64_json}`,
+        prompt,
+        // GPT-image-1 may not include revised_prompt
+        revised_prompt: response.data[0].revised_prompt || prompt
+      };
+    } else {
+      // DALL-E 3 or other models that support response_format
+      response = await openai.images.generate({
+        model: "dall-e-3",
+        prompt,
+        n,
+        size,
+        response_format: "url",
+      });
+      
+      // Return the generated image data
+      return {
+        id: response.created,
+        url: response.data[0].url,
+        prompt,
+        revised_prompt: response.data[0].revised_prompt
+      };
+    }
   } catch (error: any) {
     // Handle different types of errors
     if (error.response) {

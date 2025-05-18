@@ -55,6 +55,7 @@ export class OpenAIProvider implements ImageGenerationProvider {
       if (model === 'gpt-image-1') {
         // GPT Image model expects 'low', 'medium', 'high', or 'auto'
         params.quality = quality;
+        // GPT Image model returns base64 by default without needing response_format
       } else {
         // Only add response_format, style, and quality for non-gpt-image-1 models
         params.response_format = format as any;
@@ -70,13 +71,29 @@ export class OpenAIProvider implements ImageGenerationProvider {
       const response = await this.client.images.generate(params);
 
       const image = response.data?.[0];
-      if (!image || !image.url) {
+      if (!image) {
         throw new Error('No image was generated');
+      }
+
+      let imageUrl: string;
+      
+      // Handle different response formats
+      if (image.b64_json) {
+        // For base64 responses (GPT-image-1)
+        const mimeType = format === 'jpeg' ? 'image/jpeg' :
+                         format === 'webp' ? 'image/webp' :
+                         'image/png';
+        imageUrl = `data:${mimeType};base64,${image.b64_json}`;
+      } else if (image.url) {
+        // For URL responses (DALL-E)
+        imageUrl = image.url;
+      } else {
+        throw new Error('No image data found in the response');
       }
 
       return {
         id: response.created.toString(),
-        url: image.url,
+        url: imageUrl,
         prompt,
         revised_prompt: image.revised_prompt,
         createdAt: new Date(),
@@ -124,6 +141,7 @@ export class OpenAIProvider implements ImageGenerationProvider {
         params.model = model;
         // GPT Image model expects 'low', 'medium', 'high', or 'auto'
         params.quality = quality;
+        // GPT Image model returns base64 by default without needing response_format
       } else {
         // Only add response_format and quality for non-gpt-image-1 models
         params.response_format = format as any;
@@ -138,13 +156,29 @@ export class OpenAIProvider implements ImageGenerationProvider {
       const response = await this.client.images.edit(params);
 
       const resultImage = response.data?.[0];
-      if (!resultImage || !resultImage.url) {
+      if (!resultImage) {
         throw new Error('No image was generated from edit');
+      }
+
+      let imageUrl: string;
+      
+      // Handle different response formats
+      if (resultImage.b64_json) {
+        // For base64 responses (GPT-image-1)
+        const mimeType = format === 'jpeg' ? 'image/jpeg' :
+                         format === 'webp' ? 'image/webp' :
+                         'image/png';
+        imageUrl = `data:${mimeType};base64,${resultImage.b64_json}`;
+      } else if (resultImage.url) {
+        // For URL responses (DALL-E)
+        imageUrl = resultImage.url;
+      } else {
+        throw new Error('No image data found in the response');
       }
 
       return {
         id: response.created.toString(),
-        url: resultImage.url,
+        url: imageUrl,
         prompt,
         revised_prompt: resultImage.revised_prompt,
         createdAt: new Date(),
@@ -186,21 +220,39 @@ export class OpenAIProvider implements ImageGenerationProvider {
         params.transparent = true;
       }
       
-      // Only add response_format for non-gpt-image-1 models
-      if (model !== 'gpt-image-1') {
+      // Set response format based on model
+      if (model === 'gpt-image-1') {
+        // GPT Image model returns base64 by default without needing response_format
+      } else {
         params.response_format = format as any;
       }
       
       const response = await this.client.images.createVariation(params);
 
       const resultImage = response.data?.[0];
-      if (!resultImage || !resultImage.url) {
+      if (!resultImage) {
         throw new Error('No variation was generated');
+      }
+
+      let imageUrl: string;
+      
+      // Handle different response formats
+      if (resultImage.b64_json) {
+        // For base64 responses (GPT-image-1)
+        const mimeType = format === 'jpeg' ? 'image/jpeg' :
+                         format === 'webp' ? 'image/webp' :
+                         'image/png';
+        imageUrl = `data:${mimeType};base64,${resultImage.b64_json}`;
+      } else if (resultImage.url) {
+        // For URL responses (DALL-E)
+        imageUrl = resultImage.url;
+      } else {
+        throw new Error('No image data found in the response');
       }
 
       return {
         id: response.created.toString(),
-        url: resultImage.url,
+        url: imageUrl,
         prompt: 'Variation of original image',
         createdAt: new Date(),
         quality,
