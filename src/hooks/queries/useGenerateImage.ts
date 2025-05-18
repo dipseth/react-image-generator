@@ -32,6 +32,7 @@ export function useGenerateImage() {
       setError(null);
     },
     onSuccess: (data) => {
+      // Add image to store (which now automatically persists to IndexedDB)
       addImage(data);
       queryClient.invalidateQueries({ queryKey: ['images'] });
     },

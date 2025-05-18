@@ -1,5 +1,6 @@
 import type { StateCreator } from 'zustand';
 import type { GeneratedImage } from '../../types';
+import { loadImages, saveImages, clearImages, clearAllData } from '../../utils/imagePersistence';
 
 export interface ImageOperationState {
   isGenerating: boolean;
@@ -7,6 +8,7 @@ export interface ImageOperationState {
   isCreatingVariation: boolean;
   selectedImageId: string | null;
   error: string | null;
+  isHydrating: boolean;
 }
 
 export interface ImageSlice {
@@ -29,9 +31,13 @@ export interface ImageSlice {
   clearEditedImages: () => void;
   clearVariations: () => void;
   clearAll: () => void;
+  
+  // Persistence actions
+  hydrateFromIndexedDB: () => Promise<void>;
+  setHydrating: (status: boolean) => void;
 }
 
-export const createImageSlice: StateCreator<ImageSlice> = (set) => ({
+export const createImageSlice: StateCreator<ImageSlice> = (set, get) => ({
   // Initial state
   images: [],
   editedImages: [],
@@ -41,36 +47,70 @@ export const createImageSlice: StateCreator<ImageSlice> = (set) => ({
     isEditing: false,
     isCreatingVariation: false,
     selectedImageId: null,
-    error: null
+    error: null,
+    isHydrating: false
   },
 
   // Actions
-  addImage: (image) =>
-    set((state) => ({
-      images: [image, ...state.images],
-      operationState: {
-        ...state.operationState,
-        error: null
-      }
-    })),
+  addImage: (image) => {
+    set((state) => {
+      const newImages = [image, ...state.images];
+      // Persist to IndexedDB
+      saveImages(newImages).then(() => {
+        console.log(`[ImageStore] addImage: Persisted ${newImages.length} images to IndexedDB`);
+      }).catch(error => {
+        console.error('Failed to save images to IndexedDB:', error);
+      });
 
-  addEditedImage: (image) =>
-    set((state) => ({
-      editedImages: [image, ...state.editedImages],
-      operationState: {
-        ...state.operationState,
-        error: null
-      }
-    })),
+      return {
+        images: newImages,
+        operationState: {
+          ...state.operationState,
+          error: null
+        }
+      };
+    });
+  },
 
-  addVariation: (image) =>
-    set((state) => ({
-      variations: [image, ...state.variations],
-      operationState: {
-        ...state.operationState,
-        error: null
-      }
-    })),
+  addEditedImage: (image) => {
+    set((state) => {
+      const newEditedImages = [image, ...state.editedImages];
+      // Persist to IndexedDB
+      saveImages(newEditedImages, 'EDITED_IMAGES').then(() => {
+        console.log(`[ImageStore] addEditedImage: Persisted ${newEditedImages.length} edited images to IndexedDB`);
+      }).catch(error => {
+        console.error('Failed to save edited images to IndexedDB:', error);
+      });
+
+      return {
+        editedImages: newEditedImages,
+        operationState: {
+          ...state.operationState,
+          error: null
+        }
+      };
+    });
+  },
+
+  addVariation: (image) => {
+    set((state) => {
+      const newVariations = [image, ...state.variations];
+      // Persist to IndexedDB
+      saveImages(newVariations, 'VARIATIONS').then(() => {
+        console.log(`[ImageStore] addVariation: Persisted ${newVariations.length} variations to IndexedDB`);
+      }).catch(error => {
+        console.error('Failed to save variations to IndexedDB:', error);
+      });
+
+      return {
+        variations: newVariations,
+        operationState: {
+          ...state.operationState,
+          error: null
+        }
+      };
+    });
+  },
 
   setGenerating: (status) =>
     set((state) => ({
@@ -115,31 +155,68 @@ export const createImageSlice: StateCreator<ImageSlice> = (set) => ({
       }
     })),
 
-  clearImages: () =>
-    set((state) => ({
-      images: [],
-      operationState: {
-        ...state.operationState
-      }
-    })),
+  clearImages: () => {
+    set((state) => {
+      // Clear from IndexedDB
+      clearImages().then(() => {
+        console.log('[ImageStore] clearImages: Cleared images from IndexedDB');
+      }).catch(error => {
+        console.error('Failed to clear images from IndexedDB:', error);
+      });
 
-  clearEditedImages: () =>
-    set((state) => ({
-      editedImages: [],
-      operationState: {
-        ...state.operationState
-      }
-    })),
+      return {
+        images: [],
+        operationState: {
+          ...state.operationState
+        }
+      };
+    });
+  },
 
-  clearVariations: () =>
-    set((state) => ({
-      variations: [],
-      operationState: {
-        ...state.operationState
-      }
-    })),
+  clearEditedImages: () => {
+    set((state) => {
+      // Clear from IndexedDB
+      clearImages('EDITED_IMAGES').then(() => {
+        console.log('[ImageStore] clearEditedImages: Cleared edited images from IndexedDB');
+      }).catch(error => {
+        console.error('Failed to clear edited images from IndexedDB:', error);
+      });
 
-  clearAll: () =>
+      return {
+        editedImages: [],
+        operationState: {
+          ...state.operationState
+        }
+      };
+    });
+  },
+
+  clearVariations: () => {
+    set((state) => {
+      // Clear from IndexedDB
+      clearImages('VARIATIONS').then(() => {
+        console.log('[ImageStore] clearVariations: Cleared variations from IndexedDB');
+      }).catch(error => {
+        console.error('Failed to clear variations from IndexedDB:', error);
+      });
+
+      return {
+        variations: [],
+        operationState: {
+          ...state.operationState
+        }
+      };
+    });
+  },
+
+  clearAll: () => {
+    // Clear all data from IndexedDB
+    clearAllData().then(() => {
+      console.log('[ImageStore] clearAll: Cleared all image data from IndexedDB');
+    }).catch(error => {
+      console.error('Failed to clear all data from IndexedDB:', error);
+    });
+
     set({
       images: [],
       editedImages: [],
@@ -149,7 +226,57 @@ export const createImageSlice: StateCreator<ImageSlice> = (set) => ({
         isEditing: false,
         isCreatingVariation: false,
         selectedImageId: null,
-        error: null
+        error: null,
+        isHydrating: false
       }
-    })
+    });
+  },
+  
+  // Persistence actions
+  hydrateFromIndexedDB: async () => {
+    try {
+      set(state => ({
+        operationState: {
+          ...state.operationState,
+          isHydrating: true
+        }
+      }));
+      
+      // Load all image types from IndexedDB
+      const [images, editedImages, variations] = await Promise.all([
+        loadImages('IMAGES'),
+        loadImages('EDITED_IMAGES'),
+        loadImages('VARIATIONS')
+      ]);
+
+      console.log(`[ImageStore] hydrateFromIndexedDB: Hydrated ${images.length} images, ${editedImages.length} edited images, ${variations.length} variations from IndexedDB`);
+
+      set({
+        images,
+        editedImages,
+        variations,
+        operationState: {
+          ...get().operationState,
+          isHydrating: false
+        }
+      });
+    } catch (error) {
+      console.error('Failed to hydrate from IndexedDB:', error);
+      set(state => ({
+        operationState: {
+          ...state.operationState,
+          isHydrating: false,
+          error: 'Failed to load images from storage'
+        }
+      }));
+    }
+  },
+  
+  setHydrating: (status) =>
+    set((state) => ({
+      operationState: {
+        ...state.operationState,
+        isHydrating: status
+      }
+    }))
 });

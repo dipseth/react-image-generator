@@ -8,14 +8,29 @@ import {
   Group,
   Paper,
   Title,
-  Stack
+  Stack,
+  Loader,
+  Center
 } from '@mantine/core';
 import useStore from '../../store';
 import type { ImageSlice } from '../../store/slices/imageSlice';
 
 export function ImageGallery() {
-  // Use a simple selector to prevent unnecessary re-renders
+  // Use selectors to prevent unnecessary re-renders
   const images = useStore((state: ImageSlice) => state.images);
+  const isHydrating = useStore((state: ImageSlice) => state.operationState.isHydrating);
+
+  // Show loading state during hydration
+  if (isHydrating) {
+    return (
+      <Center py="xl">
+        <Stack align="center" gap="md">
+          <Loader size="md" />
+          <Text c="dimmed">Loading your images...</Text>
+        </Stack>
+      </Center>
+    );
+  }
 
   if (images.length === 0) {
     return (
@@ -42,6 +57,8 @@ export function ImageGallery() {
               alt={image.prompt}
               height={300}
               fit="cover"
+              fallbackSrc="/placeholder-image.svg"
+              loading="lazy"
             />
           </Card.Section>
 
