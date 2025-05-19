@@ -24,6 +24,7 @@ import type { ImageSlice } from '../../store/slices/imageSlice';
 import type { GeneratedImage } from '../../types';
 import { notifyTV } from '../../utils/tvIntegration';
 import { config } from '../../config';
+import { DownloadIcon } from '../DownloadIcon';
 
 // Diagnostic log: Check if ImageGallery is being rendered as a standalone page or within another component
 console.log('[ImageGallery] Rendered. Location:', window?.location?.pathname);
@@ -114,6 +115,13 @@ export function ImageGallery() {
                   </ActionIcon>
                 </Tooltip>
               </Box>
+              
+              {/* Download icon - positioned separately for better UX */}
+              <DownloadIcon
+                imageUrl={image.url}
+                prompt={image.prompt}
+                position="bottom-right"
+              />
             </Card.Section>
 
             <Stack mt="md" gap={4}>
@@ -227,12 +235,22 @@ export function ImageGallery() {
               </Tooltip>
             )}
 
-            <Image
-              src={fullscreenImage.url}
-              alt={fullscreenImage.prompt}
-              fit="contain"
-              style={{ maxHeight: '90vh', maxWidth: '90vw' }}
-            />
+            <Box style={{ position: 'relative' }}>
+              <Image
+                src={fullscreenImage.url}
+                alt={fullscreenImage.prompt}
+                fit="contain"
+                style={{ maxHeight: '90vh', maxWidth: '90vw' }}
+              />
+              
+              {/* Download icon for fullscreen view */}
+              <DownloadIcon
+                imageUrl={fullscreenImage.url}
+                prompt={fullscreenImage.prompt}
+                position="bottom-right"
+                size={24}
+              />
+            </Box>
 
             {/* TV integration feedback */}
             {tvPostStatus === 'success' && (

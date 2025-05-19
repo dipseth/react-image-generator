@@ -4,6 +4,13 @@ const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const {
+  generateRegistrationOptions,
+  verifyRegistrationResponse,
+  generateAuthenticationOptions,
+  verifyAuthenticationResponse
+} = require('@simplewebauthn/server');
+const { isoBase64URL } = require('@simplewebauthn/server/helpers');
 
 // Create Express server
 const app = express();
@@ -13,6 +20,21 @@ app.use(cors());
 
 // Parse JSON bodies with increased size limit for image data
 app.use(express.json({ limit: '50mb' }));
+
+// WebAuthn configuration
+const rpID = process.env.RP_ID || 'localhost';
+const rpName = 'React Test App';
+const origin = process.env.ORIGIN || `http://${rpID}:3000`;
+
+// In-memory store for user credentials
+// In a production environment, this would be replaced with a database
+const inMemoryUserDeviceDB = {};
+
+// Helper function to generate a random user ID
+function generateUserId() {
+  // Return a Buffer directly instead of converting to hex string
+  return crypto.randomBytes(16);
+}
 
 // TV server endpoint
 const TV_SERVER_URL = 'http://10.0.0.77:7979/notify';
@@ -238,6 +260,340 @@ app.get('/test-tv-connection', async (req, res) => {
         </body>
       </html>
     `);
+  }
+});
+
+/**
+ * WebAuthn Registration Options Endpoint
+ * Generates registration options for a new passkey
+ */
+app.post('/webauthn/register/options', async (req, res) => {
+  try {
+    const { username } = req.body;
+    
+    if (!username) {
+      return res.status(400).json({ error: 'Username is required' });
+    }
+    
+    // Check if user exists, or create a new one
+    if (!inMemoryUserDeviceDB[username]) {
+      inMemoryUserDeviceDB[username] = {
+        id: generateUserId(),
+        username,
+        devices: [],
+        currentChallenge: null
+      };
+    }
+    
+    const user = inMemoryUserDeviceDB[username];
+    
+    // Generate registration options
+    const registrationOptions = {
+      rpName,
+      rpID,
+      userID: user.id,
+      userName: username,
+      authenticatorSelection: {
+        // Defaults
+        residentKey: 'preferred',
+        userVerification: 'preferred',
+        // Optional: restrict to platform authenticators (like TouchID, FaceID)
+        // authenticatorAttachment: 'platform',
+      },
+      // Always explicitly set excludeCredentials to avoid SimpleWebAuthn issues
+      excludeCredentials: []
+    };
+    
+    // If the user has existing devices, add them to excludeCredentials
+    if (user.devices.length > 0) {
+      registrationOptions.excludeCredentials = user.devices.map(device => ({
+        id: isoBase64URL.fromBuffer(device.credentialID),
+        type: 'public-key',
+        transports: device.transports || ['internal']
+      }));
+    }
+    
+    const options = await generateRegistrationOptions(registrationOptions);
+    
+    // Save the challenge for verification
+    user.currentChallenge = options.challenge;
+    
+    res.json(options);
+  } catch (error) {
+    console.error('Error generating registration options:', error);
+    res.status(500).json({
+      error: 'Failed to generate registration options',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * WebAuthn Registration Verification Endpoint
+ * Verifies the response from the authenticator after registration
+ */
+app.post('/webauthn/register/verify', async (req, res) => {
+  try {
+    const { username, attestationResponse } = req.body;
+    
+    if (!username || !attestationResponse) {
+      return res.status(400).json({ error: 'Username and attestation response are required' });
+    }
+    
+    const user = inMemoryUserDeviceDB[username];
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    if (!user.currentChallenge) {
+      return res.status(400).json({ error: 'No challenge found for user' });
+    }
+    
+    // Verify the attestation response
+    const verification = await verifyRegistrationResponse({
+      response: attestationResponse,
+      expectedChallenge: user.currentChallenge,
+      expectedOrigin: origin,
+      expectedRPID: rpID,
+      requireUserVerification: true
+    });
+    
+    if (!verification.verified) {
+      return res.status(400).json({ error: 'Registration verification failed' });
+    }
+    
+    // Get the authenticator data from the verification
+    const { registrationInfo } = verification;
+    
+    if (!registrationInfo) {
+      return res.status(400).json({ error: 'Registration info missing' });
+    }
+    
+    // Create a new device entry
+    const newDevice = {
+      credentialID: registrationInfo.credentialID,
+      credentialPublicKey: registrationInfo.credentialPublicKey,
+      counter: registrationInfo.counter,
+      transports: attestationResponse.response.transports || [],
+      registered: new Date().toISOString()
+    };
+    
+    // Add the device to the user's devices
+    user.devices.push(newDevice);
+    
+    // Clear the challenge
+    user.currentChallenge = null;
+    
+    res.json({
+      success: true,
+      message: 'Registration successful',
+      device: {
+        credentialID: isoBase64URL.fromBuffer(newDevice.credentialID),
+        transports: newDevice.transports
+      }
+    });
+  } catch (error) {
+    console.error('Error verifying registration:', error);
+    res.status(500).json({
+      error: 'Failed to verify registration',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * WebAuthn Authentication Options Endpoint
+ * Generates authentication options for an existing user
+ */
+app.post('/webauthn/authenticate/options', async (req, res) => {
+  try {
+    const { username } = req.body;
+    
+    if (!username) {
+      return res.status(400).json({ error: 'Username is required' });
+    }
+    
+    const user = inMemoryUserDeviceDB[username];
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    if (user.devices.length === 0) {
+      return res.status(400).json({ error: 'No registered devices found for user' });
+    }
+    
+    // Generate authentication options
+    const authenticationOptions = {
+      rpID,
+      userVerification: 'preferred'
+    };
+    
+    // Add allowCredentials if the user has devices
+    if (user.devices.length > 0) {
+      authenticationOptions.allowCredentials = user.devices.map(device => ({
+        id: isoBase64URL.fromBuffer(device.credentialID),
+        type: 'public-key',
+        transports: device.transports || ['internal']
+      }));
+    }
+    
+    const options = await generateAuthenticationOptions(authenticationOptions);
+    
+    // Save the challenge for verification
+    user.currentChallenge = options.challenge;
+    
+    res.json(options);
+  } catch (error) {
+    console.error('Error generating authentication options:', error);
+    res.status(500).json({
+      error: 'Failed to generate authentication options',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * WebAuthn Authentication Verification Endpoint
+ * Verifies the response from the authenticator after authentication
+ */
+app.post('/webauthn/authenticate/verify', async (req, res) => {
+  try {
+    const { username, assertionResponse } = req.body;
+    
+    if (!username || !assertionResponse) {
+      return res.status(400).json({ error: 'Username and assertion response are required' });
+    }
+    
+    const user = inMemoryUserDeviceDB[username];
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    if (!user.currentChallenge) {
+      return res.status(400).json({ error: 'No challenge found for user' });
+    }
+    
+    // Find the authenticator device
+    const credentialID = assertionResponse.id;
+    const device = user.devices.find(device =>
+      isoBase64URL.fromBuffer(device.credentialID) === credentialID
+    );
+    
+    if (!device) {
+      return res.status(400).json({ error: 'Authenticator not registered for this user' });
+    }
+    
+    // Verify the assertion response
+    const verification = await verifyAuthenticationResponse({
+      response: assertionResponse,
+      expectedChallenge: user.currentChallenge,
+      expectedOrigin: origin,
+      expectedRPID: rpID,
+      authenticator: {
+        credentialID: device.credentialID,
+        credentialPublicKey: device.credentialPublicKey,
+        counter: device.counter
+      },
+      requireUserVerification: true
+    });
+    
+    if (!verification.verified) {
+      return res.status(400).json({ error: 'Authentication verification failed' });
+    }
+    
+    // Update the device counter
+    device.counter = verification.authenticationInfo.newCounter;
+    
+    // Clear the challenge
+    user.currentChallenge = null;
+    
+    // Generate a simple token (in a real app, you would use JWT)
+    const token = crypto.randomBytes(32).toString('hex');
+    
+    // In a real application, you would store the token with an expiry
+    // For this demo, we'll just store it in memory
+    user.token = token;
+    
+    // Return user info and token
+    res.json({
+      success: true,
+      message: 'Authentication successful',
+      user: {
+        id: user.id,
+        username: user.username
+      },
+      token
+    });
+    
+    if (!verification.verified) {
+      return res.status(400).json({ error: 'Authentication verification failed' });
+    }
+    
+    // Update the device counter
+    device.counter = verification.authenticationInfo.newCounter;
+    
+    // Clear the challenge
+    user.currentChallenge = null;
+    
+    // In a real application, you would generate a session token here
+    // For this phase, we'll just return a success message
+    res.json({
+      success: true,
+      message: 'Authentication successful',
+      user: {
+        id: user.id,
+        username: user.username
+      }
+    });
+  } catch (error) {
+    console.error('Error verifying authentication:', error);
+    res.status(500).json({
+      error: 'Failed to verify authentication',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * WebAuthn Token Verification Endpoint
+ * Verifies if a token is valid and returns user information
+ */
+app.get('/webauthn/verify', (req, res) => {
+  try {
+    // Get the authorization header
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'No token provided' });
+    }
+    
+    // Extract the token
+    const token = authHeader.split(' ')[1];
+    
+    // Find the user with this token
+    const user = Object.values(inMemoryUserDeviceDB).find(user => user.token === token);
+    
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    
+    // Return user information
+    res.json({
+      user: {
+        id: user.id,
+        username: user.username
+      },
+      token
+    });
+  } catch (error) {
+    console.error('Error verifying token:', error);
+    res.status(500).json({
+      error: 'Failed to verify token',
+      details: error.message
+    });
   }
 });
 

@@ -1,6 +1,6 @@
 import '@mantine/core/styles.css';
 // Add tabler icons for dark mode toggle
-import { MantineProvider, Container, Stack, ActionIcon, Group } from '@mantine/core';
+import { MantineProvider, Container, Stack, ActionIcon, Group, Title, Space } from '@mantine/core';
 // If @tabler/icons-react is not installed, use emoji fallback for icons
 let IconSun: React.FC<{ size?: number }> = () => <span role="img" aria-label="sun">🌞</span>;
 let IconMoon: React.FC<{ size?: number }> = () => <span role="img" aria-label="moon">🌙</span>;
@@ -14,6 +14,8 @@ try {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ImageGenerator } from './components/ImageGenerator';
 import { ImageGallery } from './components/ImageGallery';
+import { AuthButton } from './components/Auth/AuthButton';
+import { AuthenticatedApp } from './components/Auth/AuthenticatedApp';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -70,6 +72,8 @@ const theme: MantineThemeOverride = {
 import { useState, useEffect } from 'react';
 
 function App() {
+  console.log("[App] Rendering");
+  
   const [colorScheme, setColorScheme] = useState<'light' | 'dark'>('light');
   const toggleColorScheme = () =>
     setColorScheme((prev: 'light' | 'dark') => (prev === 'dark' ? 'light' : 'dark'));
@@ -88,30 +92,33 @@ function App() {
         theme={theme}
         forceColorScheme={colorScheme}
       >
-        {/* Set color scheme globally on body */}
-        {(() => {
-          // This IIFE is a hack to allow hooks at the top level
-          // We'll use useEffect below for the real implementation
-          return null;
-        })()}
         <Container size="lg" py="xl" style={{ paddingBottom: 'calc(80px + var(--mantine-spacing-xl))' }}>
           <Stack gap="xl">
-            <Group justify="flex-end">
-              <ActionIcon
-                variant="outline"
-                color={colorScheme === 'dark' ? 'yellow' : 'blue'}
-                onClick={toggleColorScheme}
-                title="Toggle color scheme"
-                size="lg"
-                aria-label="Toggle dark mode"
-              >
-                {colorScheme === 'dark' ? <IconSun size={20} /> : <IconMoon size={20} />}
-              </ActionIcon>
+            <Group justify="space-between" align="center">
+              <Title order={2}>Image Generator</Title>
+              <Group>
+                <AuthButton />
+                <ActionIcon
+                  variant="outline"
+                  color={colorScheme === 'dark' ? 'yellow' : 'blue'}
+                  onClick={toggleColorScheme}
+                  title="Toggle color scheme"
+                  size="lg"
+                  aria-label="Toggle dark mode"
+                >
+                  {colorScheme === 'dark' ? <IconSun size={20} /> : <IconMoon size={20} />}
+                </ActionIcon>
+              </Group>
             </Group>
-            <ImageGallery />
+            
+            <AuthenticatedApp>
+              <ImageGallery />
+            </AuthenticatedApp>
           </Stack>
         </Container>
-        <ImageGenerator />
+        <AuthenticatedApp>
+          <ImageGenerator />
+        </AuthenticatedApp>
       </MantineProvider>
     </QueryClientProvider>
   );
