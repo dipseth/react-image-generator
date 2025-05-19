@@ -24,4 +24,8 @@ export interface AppConfig {
     apiKey: string;
     defaults?: ImageGenerationDefaults;
   };
+  tv?: {
+    enabled: boolean;
+    serverUrl: string;
+  };
 }

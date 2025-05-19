@@ -13,9 +13,13 @@ import {
   LoadingOverlay,
   Divider,
   Box,
-  Tooltip
+  Tooltip,
+  Collapse,
+  ActionIcon,
+  Paper
 } from '@mantine/core';
 /* If @tabler/icons-react is not installed, use emoji in labels as fallback for icons */
+import { useLocalStorage } from '@mantine/hooks';
 import { useGenerateImage } from '../../hooks/queries/useGenerateImage';
 import useStore from '../../store';
 import type { ImageSlice } from '../../store/slices/imageSlice';
@@ -60,6 +64,12 @@ export function ImageGenerator() {
   const [quality, setQuality] = useState<string>('auto'); // Default to 'auto' for gpt-image-1
   const [format, setFormat] = useState<string>('url');
   const [transparency, setTransparency] = useState<boolean>(false);
+  
+  // State for collapsible advanced parameters
+  const [showAdvanced, setShowAdvanced] = useLocalStorage({
+    key: 'image-generator-show-advanced',
+    defaultValue: false,
+  });
 
   const { mutate, isPending } = useGenerateImage();
   
@@ -83,35 +93,56 @@ export function ImageGenerator() {
   };
 
   return (
-    <Card shadow="md" radius="lg" p="xl" withBorder style={{ maxWidth: 520, margin: '0 auto' }}>
-      <Group mb="md" align="center" gap="xs">
-        <span style={{ fontSize: 28 }} role="img" aria-label="photo">🖼️</span>
-        <Title order={2} style={{ flex: 1 }}>Generate Image</Title>
-        <Tooltip label="Image generation settings">
-          <span style={{ fontSize: 22 }} role="img" aria-label="settings">⚙️</span>
-        </Tooltip>
-      </Group>
-      <Divider mb="md" />
+    <Paper
+      shadow="md"
+      radius="lg"
+      withBorder
+      style={{
+        position: 'fixed',
+        bottom: 0,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: '100%',
+        maxWidth: '800px',
+        zIndex: 1000,
+        padding: '12px 16px',
+        backdropFilter: 'blur(10px)',
+        backgroundColor: 'var(--mantine-color-body)',
+        border: '1px solid var(--mantine-color-gray-3)',
+        borderBottom: 'none',
+        borderRadius: '16px 16px 0 0',
+        boxShadow: '0 -4px 12px rgba(0, 0, 0, 0.1)',
+        transition: 'all 0.3s ease'
+      }}
+    >
       <form onSubmit={handleSubmit}>
-        <Stack gap="sm">
-          {error && (
-            <Alert
-              color="red"
-              title="Error"
-              withCloseButton
-              closeButtonLabel="Dismiss"
-              onClose={() => setError(null)}
-              mb="sm"
-            >
-              {error}
-            </Alert>
-          )}
+        {error && (
+          <Alert
+            color="red"
+            title="Error"
+            withCloseButton
+            closeButtonLabel="Dismiss"
+            onClose={() => setError(null)}
+            mb="sm"
+            style={{
+              position: 'absolute',
+              bottom: '100%',
+              left: 0,
+              right: 0,
+              zIndex: 1001,
+              maxWidth: '800px',
+              margin: '0 auto'
+            }}
+          >
+            {error}
+          </Alert>
+        )}
 
-          <Box mb="xs">
+        <Group align="flex-start" gap="md" wrap="nowrap">
+          {/* Main prompt input and generate button */}
+          <Box style={{ flex: 1 }}>
             <TextInput
-              label="🪄 Image Description"
-              description="Describe the image you want to generate"
-              placeholder="A cyberpunk city with neon lights and flying cars"
+              placeholder="Describe the image you want to generate..."
               value={prompt}
               onChange={(e) => setPrompt(e.currentTarget.value)}
               disabled={isGenerating}
@@ -119,88 +150,148 @@ export function ImageGenerator() {
               radius="md"
               size="md"
               autoFocus
+              rightSection={
+                <Tooltip
+                  label={showAdvanced ? "Hide advanced options" : "Show advanced options"}
+                  position="top"
+                  withArrow
+                  arrowPosition="center"
+                  offset={12}
+                  zIndex={1002}
+                >
+                  <ActionIcon
+                    onClick={() => setShowAdvanced(!showAdvanced)}
+                    variant="subtle"
+                    color="gray"
+                    aria-label="Toggle advanced options"
+                  >
+                    <span style={{ fontSize: 18 }} role="img" aria-label="settings">
+                      {showAdvanced ? '🔼' : '⚙️'}
+                    </span>
+                  </ActionIcon>
+                </Tooltip>
+              }
             />
           </Box>
 
-          <Group grow gap="xs" mb="xs">
-            <Select
-              label="🎨 Size"
-              value={size}
-              onChange={(value) => setSize(value || '1024x1024')}
-              data={SIZE_OPTIONS}
-              disabled={isGenerating}
-              radius="md"
-              size="sm"
-            />
-            <Select
-              label="🤖 Model"
-              value={model}
-              onChange={(value) => {
-                const newModel = value || 'gpt-image-1';
-                setModel(newModel);
-                // Update quality to appropriate default when model changes
-                setQuality(newModel === 'gpt-image-1' ? 'auto' : 'standard');
-              }}
-              data={MODEL_OPTIONS}
-              disabled={isGenerating}
-              radius="md"
-              size="sm"
-            />
-          </Group>
+          <Button
+            type="submit"
+            loading={isGenerating}
+            disabled={!prompt.trim() || isGenerating}
+            size="md"
+            radius="md"
+          >
+            🪄 Generate
+          </Button>
+        </Group>
 
-          <Group grow gap="xs" mb="xs">
-            <Select
-              label="✨ Quality"
-              value={quality}
-              onChange={(value) => setQuality(value || (model === 'gpt-image-1' ? 'auto' : 'standard'))}
-              data={model === 'gpt-image-1' ? GPT_IMAGE_QUALITY_OPTIONS : DALLE_QUALITY_OPTIONS}
-              disabled={isGenerating}
-              radius="md"
-              size="sm"
-            />
-            <Select
-              label="🖼️ Format"
-              value={format}
-              onChange={(value) => setFormat(value || 'url')}
-              data={FORMAT_OPTIONS}
-              disabled={isGenerating}
-              radius="md"
-              size="sm"
-            />
-          </Group>
-
-          <Group mb="xs">
-            <label style={{ display: 'flex', alignItems: 'center', fontWeight: 500 }}>
-              <input
-                type="checkbox"
-                checked={transparency}
-                onChange={(e) => setTransparency(e.target.checked)}
+        <Collapse in={showAdvanced}>
+          <Box 
+            mt="md"
+            style={{
+              position: 'relative',
+              zIndex: 1500
+            }}
+          >
+            <Group grow gap="xs" mb="xs">
+              <Select
+                label="🎨 Size"
+                value={size}
+                onChange={(value) => setSize(value || '1024x1024')}
+                data={SIZE_OPTIONS}
                 disabled={isGenerating}
-                style={{ marginRight: 8 }}
+                radius="md"
+                size="sm"
+                styles={{
+                  dropdown: {
+                    zIndex: 2000
+                  }
+                }}
               />
-              Transparent background
-            </label>
-          </Group>
+              <Select
+                label="🤖 Model"
+                value={model}
+                onChange={(value) => {
+                  const newModel = value || 'gpt-image-1';
+                  setModel(newModel);
+                  // Update quality to appropriate default when model changes
+                  setQuality(newModel === 'gpt-image-1' ? 'auto' : 'standard');
+                }}
+                data={MODEL_OPTIONS}
+                disabled={isGenerating}
+                radius="md"
+                size="sm"
+                styles={{
+                  dropdown: {
+                    zIndex: 2000
+                  }
+                }}
+              />
+            </Group>
 
-          <Divider my="xs" />
+            <Group grow gap="xs" mb="xs">
+              <Select
+                label="✨ Quality"
+                value={quality}
+                onChange={(value) => setQuality(value || (model === 'gpt-image-1' ? 'auto' : 'standard'))}
+                data={model === 'gpt-image-1' ? GPT_IMAGE_QUALITY_OPTIONS : DALLE_QUALITY_OPTIONS}
+                disabled={isGenerating}
+                radius="md"
+                size="sm"
+                styles={{
+                  dropdown: {
+                    zIndex: 2000
+                  }
+                }}
+              />
+              <Select
+                label="🖼️ Format"
+                value={format}
+                onChange={(value) => setFormat(value || 'url')}
+                data={FORMAT_OPTIONS}
+                disabled={isGenerating}
+                radius="md"
+                size="sm"
+                styles={{
+                  dropdown: {
+                    zIndex: 2000
+                  }
+                }}
+              />
+            </Group>
 
-          <Group justify="flex-end">
-            <Button
-              type="submit"
-              loading={isGenerating}
-              disabled={!prompt.trim() || isGenerating}
-              size="md"
-              radius="md"
-              style={{ minWidth: 120 }}
-            >
-              🪄 Generate
-            </Button>
-          </Group>
-        </Stack>
+            <Group mb="xs">
+              <label style={{ display: 'flex', alignItems: 'center', fontWeight: 500 }}>
+                <input
+                  type="checkbox"
+                  checked={transparency}
+                  onChange={(e) => setTransparency(e.target.checked)}
+                  disabled={isGenerating}
+                  style={{ marginRight: 8 }}
+                />
+                Transparent background
+              </label>
+            </Group>
+          </Box>
+        </Collapse>
       </form>
-      <div style={{ position: 'relative', minHeight: '200px', marginTop: '1rem' }}>
-        <LoadingOverlay visible={isPending || isGenerating} />
-      </div>
-    </Card>
+      
+      {(isPending || isGenerating) && (
+        <LoadingOverlay
+          visible={true}
+          style={{
+            position: 'absolute',
+            top: '-50px',
+            left: 0,
+            right: 0,
+            height: '50px',
+            borderRadius: '16px 16px 0 0',
+            zIndex: 1001,
+            maxWidth: '800px',
+            margin: '0 auto'
+          }}
+        />
+      )}
+    </Paper>
   );
 }

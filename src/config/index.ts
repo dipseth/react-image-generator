@@ -19,6 +19,10 @@ export const config: AppConfig = {
   openai: {
     apiKey: import.meta.env.VITE_OPENAI_API_KEY || '',
     defaults: gptImageDefaults
+  },
+  tv: {
+    enabled: import.meta.env.VITE_TV_ENABLED === 'true',
+    serverUrl: import.meta.env.VITE_TV_PROXY_URL || 'http://localhost:3001/api/tv/notify'
   }
 };
 

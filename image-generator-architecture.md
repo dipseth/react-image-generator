@@ -192,12 +192,121 @@ This document outlines the architecture for a React-based image generation appli
   - Ensure proper accessibility with closeButtonLabel for alerts
   - Use TextInput instead of Input for better accessibility
   - Leverage Mantine's responsive utilities like useMatches
+  - **2025 Redesign: ImageGenerator UI/UX Improvements**
+    - The ImageGenerator component is now fixed at the bottom of the viewport, always visible when scrolling.
+    - Layout is horizontal, with the prompt input as the primary element and the generate button adjacent.
+    - Advanced parameters (size, quality, model, format, transparency) are hidden by default in a collapsible section, toggled by a settings icon.
+    - The collapsed/expanded state of advanced parameters is persisted in localStorage for user convenience.
+    - The component is center-justified with a maximum width (not full width), and features a semi-transparent background with a subtle shadow for a sleeker, less intrusive appearance.
+    - Dropdown menus for advanced parameters have a high z-index and are fully visible above the chat box, improving accessibility and usability.
+    - App.tsx is updated to add bottom padding to the main content to prevent overlap with the fixed component.
+    - All existing functionality is preserved, with improved UI/UX and accessibility.
   - **Extensibility Enhancements**:
     - Create component composition patterns for flexible UI building blocks
     - Implement theme extension points for customization
     - Build a design system abstraction layer for potential UI library changes
     - Use compound components pattern for complex UI elements
     - Create adapter components to isolate UI library dependencies
+  ```tsx
+  // Example: Redesigned ImageGenerator with Mantine UI (2025)
+  'use client';
+
+  import { useState } from 'react';
+  import {
+    TextInput,
+    Button,
+    Group,
+    Paper,
+    Alert,
+    Select,
+    Collapse,
+    ActionIcon,
+    Tooltip
+  } from '@mantine/core';
+  import { useLocalStorage } from '@mantine/hooks';
+
+  export function ImageGenerator() {
+    const [prompt, setPrompt] = useState('');
+    const [showAdvanced, setShowAdvanced] = useLocalStorage({
+      key: 'image-generator-show-advanced',
+      defaultValue: false,
+    });
+
+    return (
+      <Paper
+        shadow="md"
+        radius="lg"
+        withBorder
+        style={{
+          position: 'fixed',
+          bottom: 0,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '100%',
+          maxWidth: '800px',
+          zIndex: 1000,
+          padding: '12px 16px',
+          backdropFilter: 'blur(10px)',
+          backgroundColor: 'var(--mantine-color-body)',
+          border: '1px solid var(--mantine-color-gray-3)',
+          borderBottom: 'none',
+          borderRadius: '16px 16px 0 0',
+          boxShadow: '0 -4px 12px rgba(0, 0, 0, 0.1)',
+          transition: 'all 0.3s ease'
+        }}
+      >
+        <form>
+          <Group align="flex-start" gap="md" wrap="nowrap">
+            <TextInput
+              placeholder="Describe the image you want to generate..."
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              required
+              radius="md"
+              size="md"
+              autoFocus
+              rightSection={
+                <Tooltip
+                  label={showAdvanced ? "Hide advanced options" : "Show advanced options"}
+                  position="top"
+                  withArrow
+                  arrowPosition="center"
+                  offset={12}
+                  zIndex={1002}
+                >
+                  <ActionIcon
+                    onClick={() => setShowAdvanced(!showAdvanced)}
+                    variant="subtle"
+                    color="gray"
+                    aria-label="Toggle advanced options"
+                  >
+                    <span style={{ fontSize: 18 }} role="img" aria-label="settings">
+                      {showAdvanced ? '🔼' : '⚙️'}
+                    </span>
+                  </ActionIcon>
+                </Tooltip>
+              }
+            />
+            <Button
+              type="submit"
+              size="md"
+              radius="md"
+            >
+              🪄 Generate
+            </Button>
+          </Group>
+          <Collapse in={showAdvanced}>
+            <Group grow gap="xs" mb="xs" mt="md">
+              <Select label="🎨 Size" data={[]} />
+              <Select label="🤖 Model" data={[]} />
+              <Select label="✨ Quality" data={[]} />
+              <Select label="🖼️ Format" data={[]} />
+            </Group>
+          </Collapse>
+        </form>
+      </Paper>
+    );
+  }
   ```tsx
   // Example component with Mantine UI
   'use client';

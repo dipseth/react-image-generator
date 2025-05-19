@@ -94,7 +94,7 @@ function App() {
           // We'll use useEffect below for the real implementation
           return null;
         })()}
-        <Container size="lg" py="xl">
+        <Container size="lg" py="xl" style={{ paddingBottom: 'calc(80px + var(--mantine-spacing-xl))' }}>
           <Stack gap="xl">
             <Group justify="flex-end">
               <ActionIcon
@@ -108,10 +108,10 @@ function App() {
                 {colorScheme === 'dark' ? <IconSun size={20} /> : <IconMoon size={20} />}
               </ActionIcon>
             </Group>
-            <ImageGenerator />
             <ImageGallery />
           </Stack>
         </Container>
+        <ImageGenerator />
       </MantineProvider>
     </QueryClientProvider>
   );
