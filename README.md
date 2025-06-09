@@ -199,3 +199,7 @@ Common issues and solutions:
    - Verify the server is properly configured for WebAuthn
    - Check server logs for detailed error messages
    - Ensure the server's origin matches the client's origin
+
+## Development Notes
+
+This repository is used for testing pull requests with Codex.
